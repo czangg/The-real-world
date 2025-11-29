@@ -1,0 +1,46 @@
+---
+title: "real world - analysis"
+html:
+    df-print: kable
+editor: source
+---
+
+## Preliminaries
+
+We load the chats / entries that were matched to Swiss folks based on location information in their profile description as well as the necessary libraries.
+
+```{r preliminaries, include=FALSE, echo=FALSE, warning=FALSE}
+library(dplyr)
+library(purrr)
+library(tidytext)
+library(tm)
+library(stringr)
+library(readxl)
+
+
+rm(list=ls()) ##Clean up workspace
+
+setwd("C:/Data/The-real-world/")
+main.path <- getwd()
+
+#Load existing files
+df.matched <- read.csv("./Code/real_world_all_matched.csv")
+```
+
+## Users
+
+In a first step, we look at the users, or rather, their profile descriptions and how active they are in the chats. To do so, we first count unique contributions and then turn to their descriptions to see how they define themselves.
+
+```{r contributions}
+unique.users <- length(unique(df.matched$id))
+
+contr.count <- df.matched %>% count(id) %>% arrange(n)
+```
+
+Out of the 181 users idenified as being somehow related to Switzerland according to their self-description in their profile, we find only `{r} unique.users` in this sub-folder of the private chats (*The Real World*). What is more, they contribute quite unequally to the different channels within this sub-folder. Out of the `{r} nrow(df.matched)` messages, one user alone contributed almost half with `{r} max(contr.count$n)` posts, while others appear only once or twice. 
+
+```{r users}
+contr.count
+```
+
+Now let's look at the descriptions of their profiles.
