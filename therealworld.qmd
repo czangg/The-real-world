@@ -1,0 +1,156 @@
+---
+title: "The Real World"
+format: html
+editor: visual
+---
+
+## Loading the json files
+
+```{r libraries, warning=FALSE, echo=FALSE, include=FALSE}
+library(jsonlite)
+library(dplyr)
+library(purrr)
+library(tidytext)
+library(tm)
+library(stringr)
+library(readxl)
+
+setwd("C:/Users/zgc3/OneDrive - Berner Fachhochschule/Desktop/The-real-world")
+main.path <- getwd()
+users <- stream_in(file("C:/Users/zgc3/OneDrive - Berner Fachhochschule/Desktop/The-real-world/Data/users.json", encoding = "UTF-8"))
+
+original <- users #make a compy, just in case
+
+#keep the stuff we actually need and create a custom df
+id <- users$user$`_id`
+usernames <- users$user$username
+content <- users$user$profile$content  
+idmember <- users$member$`_id`$user
+joined <- users$member$joined_at
+timeout <- users$member$timeout
+
+df.users <- as.data.frame(cbind(id, 
+                                usernames,
+                                content,
+                                idmember,
+                                joined,
+                                timeout)
+)
+#clean up
+rm(users, id, usernames, content, idmember, joined, timeout)
+
+#check the different ids
+table(df.users$id==df.users$idmember) #same, so drop
+df.users <- df.users %>%
+  select(-idmember)
+
+#check for duplicate ids
+table(duplicated(df.users$id)) #there are some, omit
+df.users <- df.users[!duplicated(df.users$id),]
+
+#with description
+
+n.description <- df.users %>%
+  filter(is.na(content)==FALSE) %>%
+  count() %>%
+  as.numeric()
+
+df.users <- df.users %>%
+  filter(is.na(content)==FALSE)
+```
+
+There are `{r} nrow(df.users)` unique registered users in the data (there were about 80'000 duplicates). However, only `{r} round(n.description/nrow(df.users)*100,2)`% of all registered, unique users have a profile description.
+
+In a next step, we preprocess the description and look for location information which would place them in Switzerland.
+
+```{r preprocessing, warning=FALSE}
+# Create a corpus
+corpus <- Corpus(VectorSource(df.users$content))
+
+# Preprocessing
+corpus <- corpus %>%
+  tm_map(content_transformer(tolower)) %>%   # Convert to lowercase
+  tm_map(removePunctuation) %>%              # Remove punctuation
+  #tm_map(removeNumbers) %>%                  # Remove numbers
+  tm_map(removeWords, stopwords("english")) %>%  # Remove stopwords
+  tm_map(stripWhitespace)                    # Remove extra whitespace
+
+# Convert back to data frame if needed
+clean_text <- sapply(corpus, as.character)
+df.users$clean_content <- clean_text
+```
+
+Now, let's read in a file with all the municipality names in Switzerland and add some additional terms such as "Switzerland", "Schweiz", etc.
+
+```{r municipalities}
+mun <- read_excel(paste0(main.path,"/Data/Gemeindestand.xlsx"))
+names <- mun$Gemeindename
+
+names <- Corpus(VectorSource(names))
+
+names <- names %>%
+  tm_map(content_transformer(tolower))
+
+names <- sapply(names, as.character)
+head(names)
+
+#add some additional places
+
+names <- c(names, "switzerland", "swiss", "schweiz", "suisse", "svizzera", 
+           "schwiiz", "eidgenosse", "helvetien", "zurich", "geneva")
+
+#filter for CH places in descriptions
+
+pattern <- paste0("\\b(", paste(names, collapse = "|"), ")\\b")
+
+CH.users <- df.users %>%
+  filter(str_detect(clean_content, regex(pattern, ignore_case = TRUE)))
+
+#check if at least all with "switzerland" are in there
+n.all <- df.users %>%
+  select(clean_content) %>%
+  filter(str_detect(clean_content, "switzerland"))
+
+n.ch <- CH.users %>%
+  select(clean_content) %>%
+  filter(str_detect(clean_content, "switzerland"))
+
+nrow(n.all)==nrow(n.ch) ##3 missing
+
+#save the file since this takes quite a lot of time to filter
+write.csv(CH.users, file=paste0(main.path, "/Data/CH_users.csv"))
+
+```
+
+With this, we can start adding some of the content. Let's load one of the "the real world" json files from the private channels.
+
+```{r realworld, warning=FALSE, echo=FALSE, include=FALSE}
+real.world.1 <- stream_in(file("C:/Users/zgc3/OneDrive - Berner Fachhochschule/Desktop/The-real-world/Data/Private/The Real World/01H261HJTJ4K6RM2WWGW5PS40E.json"), 
+                          simplifyDataFrame = FALSE)
+str(real.world.1[[1]])  # First record
+
+real.world.df <- map_df(real.world.1, function(batch) {
+  map_df(batch, function(x) {
+    tibble(
+      id = x$`_id` %||% NA_character_,
+      channel = x$channel %||% NA_character_,
+      author = x$author %||% NA_character_,
+      content = x$content %||% NA_character_
+    )
+  })
+})
+
+#again a huge file, so better save it for latter use
+write.csv(real.world.df, file=paste0(main.path, "/Data/real_world1.csv"))
+
+```
+
+Now we match the CH accounts with these messages.
+
+```{r combine}
+df.combined <- CH.users %>%
+  inner_join(real.world.df, by=c("id"="author"))
+
+write.csv(df.combined, file=paste0(main.path, "/Data/real_world1_matched.csv"))
+
+```
