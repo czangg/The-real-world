@@ -15,11 +15,12 @@ library(tm)
 library(stringr)
 library(readxl)
 
-setwd("C:/Users/zgc3/OneDrive - Berner Fachhochschule/Desktop/The-real-world")
+setwd("C:/Data/The-real-world/")
 main.path <- getwd()
-users <- stream_in(file("C:/Users/zgc3/OneDrive - Berner Fachhochschule/Desktop/The-real-world/Data/users.json", encoding = "UTF-8"))
+users <- stream_in(file("C:/Data/The-real-world/Data/users.json", encoding = "UTF-8"))
+#somehow strem_in doesn't work with partial file paths or paste0()...
 
-original <- users #make a compy, just in case
+original <- users #make a copy, just in case
 
 #keep the stuff we actually need and create a custom df
 id <- users$user$`_id`
@@ -125,11 +126,13 @@ nrow(n.all)==nrow(n.ch) ##3 missing
 
 ```
 
+Matching on all the municipality names leads to too many false positive matches (probably due to some places with short names such as Au, even though only full matches should be considered). Thus, let's create a manual list.
+
 ```{r mun2}
 #Alternatively, just the country names and the major cities
 names <- c("switzerland", "swiss", "schweiz", "suisse", "svizzera", 
            "schwiiz", "eidgenosse", "helvetien", "helvetia", 
-           "zurich", "geneva", "basel", "lausanne",
+           "zurich", "geneva", "genève", "genf", "basel", "lausanne",
            "bern", "winterthur", "luzern", "st gallen", "lugano", 
            "biel", "bienne", "thun", "bellinzona", "köniz",
            "fribourg", "schaffhausen", "la chaux de fonds", "chur", 
@@ -141,14 +144,14 @@ CH.users <- df.users %>%
   filter(str_detect(clean_content, regex(pattern, ignore_case = TRUE)))
 
 #save the file since this takes quite a lot of time to filter
-write.csv(CH.users, file=paste0(main.path, "/Data/CH_users.csv"))
+write.csv(CH.users, file=paste0(main.path, "/Code/CH_users.csv"))
 
 ```
 
-With this, we can start adding some of the content. Let's load one of the "the real world" json files from the private channels.
+With this (about 180 users), we can start adding some of the content. Let's load one of the "the real world" json files from the private channels.
 
 ```{r realworld, warning=FALSE, echo=FALSE, include=FALSE}
-real.world.1 <- stream_in(file("C:/Users/zgc3/OneDrive - Berner Fachhochschule/Desktop/The-real-world/Data/Private/The Real World/01H261HJTJ4K6RM2WWGW5PS40E.json"), 
+real.world.1 <- stream_in(file("C:/Data/The-real-world/Data/Private/The Real World/01H261HJTJ4K6RM2WWGW5PS40E.json"), 
                           simplifyDataFrame = FALSE)
 str(real.world.1[[1]])  # First record
 
@@ -164,7 +167,7 @@ real.world.df <- map_df(real.world.1, function(batch) {
 })
 
 #again a huge file, so better save it for latter use
-write.csv(real.world.df, file=paste0(main.path, "/Code/real_world1.csv"))
+write.csv(real.world.df, file=paste0(main.path, "/Data/real_world1.csv"))
 
 ```
 
