@@ -82,14 +82,20 @@ df.users$clean_content <- clean_text
 
 Now, let's read in a file with all the municipality names in Switzerland and add some additional terms such as "Switzerland", "Schweiz", etc.
 
-```{r municipalities}
+```{r municipalities, eval=FALSE}
 mun <- read_excel(paste0(main.path,"/Data/Gemeindestand.xlsx"))
 names <- mun$Gemeindename
 
 names <- Corpus(VectorSource(names))
 
+#filter for CH places in descriptions; adds too many that aren't Swiss, probably because
+#of places such as Au, etc. --> remove stop words from that character vector as well
+
 names <- names %>%
-  tm_map(content_transformer(tolower))
+  tm_map(content_transformer(tolower)) %>%
+  tm_map(removePunctuation) %>%              # Remove punctuation (as in description)
+  tm_map(removeWords, stopwords("english")) %>%  # Remove stopwords
+  tm_map(stripWhitespace)
 
 names <- sapply(names, as.character)
 head(names)
@@ -99,7 +105,7 @@ head(names)
 names <- c(names, "switzerland", "swiss", "schweiz", "suisse", "svizzera", 
            "schwiiz", "eidgenosse", "helvetien", "zurich", "geneva")
 
-#filter for CH places in descriptions
+
 
 pattern <- paste0("\\b(", paste(names, collapse = "|"), ")\\b")
 
@@ -116,6 +122,23 @@ n.ch <- CH.users %>%
   filter(str_detect(clean_content, "switzerland"))
 
 nrow(n.all)==nrow(n.ch) ##3 missing
+
+```
+
+```{r mun2}
+#Alternatively, just the country names and the major cities
+names <- c("switzerland", "swiss", "schweiz", "suisse", "svizzera", 
+           "schwiiz", "eidgenosse", "helvetien", "helvetia", 
+           "zurich", "geneva", "basel", "lausanne",
+           "bern", "winterthur", "luzern", "st gallen", "lugano", 
+           "biel", "bienne", "thun", "bellinzona", "köniz",
+           "fribourg", "schaffhausen", "la chaux de fonds", "chur", 
+           "uster", "sion", "sitten", "zug", "neuchâtel")
+
+pattern <- paste0("\\b(", paste(names, collapse = "|"), ")\\b")
+
+CH.users <- df.users %>%
+  filter(str_detect(clean_content, regex(pattern, ignore_case = TRUE)))
 
 #save the file since this takes quite a lot of time to filter
 write.csv(CH.users, file=paste0(main.path, "/Data/CH_users.csv"))
@@ -141,7 +164,7 @@ real.world.df <- map_df(real.world.1, function(batch) {
 })
 
 #again a huge file, so better save it for latter use
-write.csv(real.world.df, file=paste0(main.path, "/Data/real_world1.csv"))
+write.csv(real.world.df, file=paste0(main.path, "/Code/real_world1.csv"))
 
 ```
 
@@ -151,6 +174,6 @@ Now we match the CH accounts with these messages.
 df.combined <- CH.users %>%
   inner_join(real.world.df, by=c("id"="author"))
 
-write.csv(df.combined, file=paste0(main.path, "/Data/real_world1_matched.csv"))
+write.csv(df.combined, file=paste0(main.path, "/Code/real_world1_matched.csv"))
 
 ```
